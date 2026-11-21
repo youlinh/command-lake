@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101a19">
+<meta name="description" content="在指挥湖采集建家、收集动物、挑战机甲与好友。">
+<title>指挥湖 · 动物机甲</title>
+  <link rel="icon" href="./mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="指挥湖大厅"><span class="brand-mark"><i></i></span><span>指挥湖<small>COMMAND LAKE</small></span></a>
+    <nav class="navigation" aria-label="主菜单">
+      <button data-tab="home" class="selected">指挥中心</button><button data-tab="roster">角色图鉴</button><button data-tab="shop">补给商店</button>
+    </nav>
+    <div class="wallet"><span class="coin-icon">◈</span><span id="coins">0</span><small>金币</small></div>
+  </header>
+  <main class="main" id="lobby">
+    <section id="home" class="screen">
+      <div class="layout">
+        <article class="hero">
+          <div class="hero-shade"></div>
+          <div class="hero-content">
+            <div class="location"><i></i> 指挥湖自然保护区</div>
+            <h1>指挥湖</h1>
+            <p class="hero-sub">荒野生存 · 动物机甲</p>
+            <p class="hero-copy">从一只橘猫开始。采集材料，建造避难所，赢下每一场对决。</p>
+            <button id="enter-world" class="primary hero-cta"><span class="play-icon"></span>进入湖区</button>
+          </div>
+          <div class="hero-foot"><span><i>◉</i> 湖岸营地</span><span id="weather-short">晴朗</span></div>
+        </article>
+        <aside class="command panel">
+          <div class="section-title"><span class="section-symbol">⌖</span><h2>作战部署</h2></div>
+          <div class="choice-group"><label>对战模式</label><div class="seg"><button class="active" data-mode="pve">AI 闯关</button><button data-mode="pvp">真人对决</button></div><p class="pages-room-note" id="pages-room-note" hidden>真人对决可在<a href="https://github.com/youlinh/command-lake">本地版</a>开启。</p></div>
+          <div class="choice-group"><label for="difficulty" id="settings-label">AI 难度</label><select id="difficulty"></select><p id="pvp-hint" class="hidden field-hint">创建房间后把邀请链接发给朋友。</p></div>
+          <div class="choice-group"><label id="squad-label">队伍人数</label><div class="seg squad"><button class="active" data-squad="1">单人</button><button data-squad="2">双人</button><button data-squad="3">三人</button><button data-squad="7">七人</button><button data-squad="custom">团群</button></div><div id="custom-line" class="custom-line hidden"><label for="custom-size">团群人数</label><input id="custom-size" type="number" value="8" min="2" step="1"></div></div>
+          <div class="deploy-summary"><span id="deploy-character">橘猫</span><span id="deploy-stage">第 01 关</span></div>
+          <button id="deploy" class="primary deploy"><span>进入 AI 战场</span><b aria-hidden="true">◈</b></button>
+        </aside>
+      </div>
+      <div class="status-grid">
+        <article class="panel status"><div class="status-icon weather-icon">☼</div><div><h3>今日天气</h3><strong id="weather"></strong></div><small id="weather-detail"></small></article>
+        <article class="panel status"><div class="status-icon">⌂</div><div><h3>湖岸避难所</h3><strong id="home-grade">待建造</strong></div><button class="text-btn" id="open-build">建造</button></article>
+        <article class="panel status"><div class="status-icon blue">✧</div><div><h3>机甲系统</h3><strong id="mech-progress">第 18 关开启</strong></div><small id="stages-cleared">已通过 0 关</small></article>
+      </div>
+      <section class="profile-strip panel"><div class="profile-icon">◇</div><div><small>当前角色</small><strong id="current-character">橘猫</strong></div><button class="secondary" data-tab="roster">切换角色</button></section>
+    </section>
+    <section id="roster" class="screen hidden">
+      <div class="page-title"><div><h1>角色图鉴</h1><p>选择出战角色。击败或购买动物，即可永久收录。</p></div><div class="seg"><button class="active" data-roster="animals">动物</button><button data-roster="humans">人类</button></div></div>
+      <div id="roster-list" class="card-list"></div>
+    </section>
+    <section id="shop" class="screen hidden">
+      <div class="page-title"><div><h1>补给商店</h1><p id="shop-character"></p></div><div class="seg"><button class="active" data-shop="skins">动物皮肤</button><button data-shop="animals">动物解锁</button></div></div>
+      <div id="shop-list" class="card-list"></div>
+    </section>
+  </main>
+</div>
+<section class="play-screen hidden" id="game" aria-label="指挥湖游戏">
+  <div id="world"></div>
+  <div class="game-top">
+    <button id="leave-game" class="glass">大厅</button>
+    <div class="game-location glass"><strong id="zone">湖岸营地</strong><small id="zone-detail"></small></div>
+    <button id="sound" class="glass" aria-label="切换音效">声</button>
+  </div>
+  <div class="game-hud">
+    <div class="health glass"><div><strong id="player-name">橘猫</strong><span id="player-hp"></span></div><div class="bar"><i id="health-fill"></i></div></div>
+    <div class="health opponent glass hidden" id="enemy-health"><div><strong id="enemy-name"></strong><span id="enemy-hp"></span></div><div class="bar"><i id="enemy-fill"></i></div></div>
+  </div>
+  <div id="game-event" class="game-event hidden"></div>
+  <div id="scene-tools" class="scene-tools hidden"><button id="world-build" class="glass">建造</button><button id="world-arena" class="glass">战场</button><button id="world-event" class="glass">演练</button></div>
+  <div class="touch-control" id="joystick" role="group" aria-label="移动摇杆"><span id="stick"></span></div>
+  <div class="game-actions">
+    <button id="aux" class="glass hidden"></button>
+    <button id="interact" class="glass">采集<small> E </small></button>
+    <button id="dash" class="glass">闪避<small> 空格 </small></button>
+    <button id="mech" class="glass">机甲<small> R </small></button>
+    <button id="skill" class="glass">技能<small> K </small></button>
+    <button id="attack" class="combat">攻击<small> J </small></button>
+  </div>
+  <div id="control-tip" class="control-tip">WASD 或方向键移动 · 拖动画面转视角</div>
+</section>
+<dialog id="modal"><div id="modal-body"></div></dialog>
+<div id="toast" class="toast hidden" role="status"></div>
+<noscript>需要启用 JavaScript 才能进入指挥湖。</noscript>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

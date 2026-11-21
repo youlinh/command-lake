@@ -1,0 +1,11 @@
+{
+  "name": "command-lake",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "build:pages": "node scripts/build-pages.mjs",
+    "test": "node --test scripts/game.test.mjs"
+  }
+}
