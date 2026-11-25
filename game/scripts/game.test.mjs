@@ -50,6 +50,24 @@ test('the built worker serves the game, nested assets and room API',async()=>{
     assert.ok(response.headers.get('content-type').startsWith(mime),path);
     assert.ok((await response.arrayBuffer()).byteLength>0,path);
   }
+  const animals=await worker.fetch(new Request('http://localhost/assets/animals.glb'),{});
+  assert.equal(animals.status,200);
+  assert.equal(animals.headers.get('content-type'),'model/gltf-binary');
+  const asset=Buffer.from(await animals.arrayBuffer());
+  assert.equal(asset.toString('ascii',0,4),'glTF');
+  assert.equal(asset.readUInt32LE(8),asset.length);
+  const json=JSON.parse(asset.toString('utf8',20,20+asset.readUInt32LE(12)));
+  assert.ok(json.extensionsRequired.includes('EXT_meshopt_compression'));
+  assert.equal(json.skins.length,14);
+  assert.equal(json.meshes.length,json.skins.length);
+  for(const {primitives} of json.meshes){
+    assert.equal(primitives.length,1);
+    for(const attribute of ['COLOR_0','JOINTS_0','WEIGHTS_0']){
+      assert.ok(Number.isInteger(primitives[0].attributes[attribute]),attribute);
+    }
+  }
+  assert.deepEqual(json.nodes.filter(node=>node.name?.startsWith('Animal_')).map(node=>node.name.slice(7)).sort(),
+    Object.values(characters).filter(character=>character.rank).map(character=>character.id).sort());
   const response=await worker.fetch(new Request('http://localhost/api/rooms',{method:'POST'}),{});
   assert.equal(response.status,503);
   assert.ok((await response.json()).error);

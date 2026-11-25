@@ -4,15 +4,16 @@ import {fileURLToPath} from 'node:url';
 
 const root=new URL('../',import.meta.url);
 const read=(path)=>readFileSync(new URL(path,root),'utf8');
-const mime={'.js':'text/javascript; charset=utf-8','.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webp':'image/webp'};
+const mime={'.js':'text/javascript; charset=utf-8','.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webp':'image/webp','.glb':'model/gltf-binary'};
 const directory=fileURLToPath(new URL('web/',root));
 const assets={};
 for(const entry of readdirSync(directory,{recursive:true,withFileTypes:true})){
   if(!entry.isFile())continue;
   const path=join(entry.parentPath,entry.name);
   const assetPath=relative(directory,path).split(sep).map(encodeURIComponent).join('/');
-  const type=mime[extname(path)]??'text/plain; charset=utf-8';
-  const bin=type==='image/webp';
+  const extension=extname(path);
+  const type=mime[extension]??'text/plain; charset=utf-8';
+  const bin=extension==='.webp'||extension==='.glb';
   assets['/'+assetPath]=[type,readFileSync(path,bin?'base64':'utf8'),bin];
 }
 const rules=read('web/rules.js').replace(/^export /gm,'');

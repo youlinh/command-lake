@@ -20,4 +20,13 @@
 
 运行 `npm run build:pages` 生成 `game/dist/pages/` 静态站点。GitHub Pages 从 `gh-pages` 分支的根目录发布该产物。
 
+默认动物外观使用 Blender 生成的 `game/web/assets/animals.glb`。Three.js 根据实际移动距离和地面高度驱动骨骼。机甲与特殊皮肤使用原有模型。
+
+在项目根目录重新生成模型，再用 `gltfpack` 压缩发布资产。模型生成已用 Blender 4.0.2 验证，第一条命令附加 `--blend animals.blend` 可同时保存可编辑工程。
+
+```sh
+blender --background --factory-startup --python-exit-code 1 --python game/scripts/export-animals.py -- --output animals-raw.glb
+npx --yes gltfpack@1.3.0 -i animals-raw.glb -o game/web/assets/animals.glb -cc -noq -kn -km -ke
+```
+
 在支持 WebGL 2 的浏览器里会进入 Three.js 场景。浏览器无法创建 WebGL 上下文时，游戏使用 Canvas 2D，场景顶部会显示「兼容画面」。
