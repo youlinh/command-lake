@@ -1,6 +1,7 @@
 import * as T from './vendor/three.module.min.js';
 import {seeded} from './landscape.js';
 import {clamp} from './rules.js';
+import {cloneAnimalModel} from './blender-animals.js';
 
 const sphere = new T.SphereGeometry(1,16,12);
 const box = new T.BoxGeometry(1,1,1);
@@ -142,25 +143,28 @@ function poseLeg(leg,cycle,liftAmount,stride,activity,bob,footHeight,duty){
   const ground=footHeight?.(hip.position.x,hip.position.z+z+.065)??0;
   const y=footBase+lift+ground-hip.position.y-bob;
   const span=Math.max(.001,Math.hypot(y,z));
-  const thigh=hip.position.y*(front?.57:.61),shin=hip.position.y*(front?.60:.55);
+  const thigh=leg.upperLength??hip.position.y*(front?.57:.61);
+  const shin=leg.lowerLength??hip.position.y*(front?.60:.55);
   const distance=clamp(span,Math.abs(thigh-shin)+.008,thigh+shin-.004);
   const pivot=(thigh*thigh-shin*shin+distance*distance)/(2*distance);
   const bend=Math.sqrt(Math.max(0,thigh*thigh-pivot*pivot))*(front?-1:1);
   const kneeY=(y*pivot+z*bend)/span,kneeZ=(z*pivot-y*bend)/span;
+  const pitch=contact?0:Math.sin(swing*Math.PI)*.24;
+  if(leg.setPose){
+    leg.setPose(kneeY,kneeZ,y,z,pitch);
+    return;
+  }
   aimBone(upper,0,0,kneeY,kneeZ,mech?1.14:.69);
   aimBone(lower,kneeY,kneeZ,y,z,mech?1.12:.65);
   foot.position.set(0,y,z+.065);
-  foot.rotation.x=contact?0:Math.sin(swing*Math.PI)*.24;
+  foot.rotation.x=pitch;
 }
 
-export function makeModel(spec,skin='default') {
-  return spec.type==='human'?makeHuman(spec):makeAnimal(spec,skin);
+export function makeModel(spec,skin='default',template) {
+  return spec.type==='human'?makeHuman(spec):makeAnimal(spec,skin,template);
 }
-function makeAnimal(spec,skin) {
-  const root = new T.Group();
-  const [body,armor] = groups();
-  root.add(body,armor);
-  armor.visible=false;
+
+function buildFallbackBody(body,spec,skin,ownMaterials) {
   const kind=spec.model;
   const [width,height,length,muzzle,tailSize,bulk]=anatomy[kind]??anatomy.cat;
   const color=skinColors[skin]??spec.color;
@@ -168,11 +172,6 @@ function makeAnimal(spec,skin) {
   const plain=kind==='cat'||kind==='badger'?fur('plain',color):coat;
   const paler=skin==='police'||skin==='soldier'?plain:
     kind==='hare'||kind==='fox'||kind==='badger'?ivory:kind==='otter'||kind==='cat'||kind==='stag'?cream:plain;
-  const glow=m(spec.aura??0x86ebea,{emissive:spec.aura??0x86ebea,emissiveIntensity:2.2,roughness:.22});
-  const ownMaterials=[glow];
-  const ownTextures=[];
-  const bones=[];
-  const armorBones=[];
   const brisket=.275+bulk;
   const heavy=kind==='bear'||kind==='boar'||spec.id==='tiger';
   oblong(body,coat,0,height,0,width,brisket,length);
@@ -228,22 +227,45 @@ function makeAnimal(spec,skin) {
   tail.position.set(0,height+.085,-length*.84);
   body.add(tail);
   ownMaterials.push(curvedTail(tail,kind,plain,spec.id==='lynx'?.31:tailSize,kind==='fox'?.171:kind==='cat'?.080:kind==='boar'?.045:.115));
+  return {head,tail,plain,paler};
+}
+
+function makeAnimal(spec,skin,template) {
+  const root = new T.Group();
+  const [body,armor] = groups();
+  root.add(body,armor);
+  armor.visible=false;
+  const kind=spec.model;
+  const [width,height,length,,,bulk]=anatomy[kind]??anatomy.cat;
+  const deer=kind==='stag',rabbit=kind==='hare';
+  const gait=gaitStyles[kind]??gaitStyles.fox;
+  const glow=m(spec.aura??0x86ebea,{emissive:spec.aura??0x86ebea,emissiveIntensity:2.2,roughness:.22});
+  const ownMaterials=[glow];
+  const ownTextures=[];
+  const baked=template?cloneAnimalModel(template,gait,kind):null;
+  if(baked)body.add(baked.root);
+  const fallback=baked?null:buildFallbackBody(body,spec,skin,ownMaterials);
+  const bones=baked?.legs??[];
+  const armorBones=[];
 
   for(const side of [-1,1])for(const front of [-1,1]){
     const ahead=front===1;
     const x=side*width*.76,z=front*length*.58;
     const hipHeight=height-(deer?.18:.095);
-    const offset=(gaitStyles[kind]??gaitStyles.fox)[(ahead?0:2)+(side===1?1:0)];
-    const leg=new T.Group();
-    leg.position.set(x,hipHeight,z);
-    body.add(leg);
-    const legW=(deer?.071:.087)+bulk*.38+(!ahead&&rabbit?.041:0);
-    const upper=oblong(leg,plain,0,0,0,legW,1,legW*(ahead?1.15:1.40));
-    const lower=oblong(leg,plain,0,0,0,legW*.68,1,legW*.77);
-    const footBase=deer?.060:.065;
-    const foot=oblong(leg,deer||kind==='boar'?hoof:kind==='cat'&&skin==='default'?paler:plain,
-      0,0,0,legW*.94,footBase,legW*(!ahead&&rabbit?2.30:1.48));
-    bones.push({hip:leg,upper,lower,foot,front:ahead,offset,footBase,mech:false});
+    const offset=gait[(ahead?0:2)+(side===1?1:0)];
+    if(fallback){
+      const {plain,paler}=fallback;
+      const leg=new T.Group();
+      leg.position.set(x,hipHeight,z);
+      body.add(leg);
+      const legW=(deer?.071:.087)+bulk*.38+(!ahead&&rabbit?.041:0);
+      const upper=oblong(leg,plain,0,0,0,legW,1,legW*(ahead?1.15:1.40));
+      const lower=oblong(leg,plain,0,0,0,legW*.68,1,legW*.77);
+      const footBase=deer?.060:.065;
+      const foot=oblong(leg,deer||kind==='boar'?hoof:kind==='cat'&&skin==='default'?paler:plain,
+        0,0,0,legW*.94,footBase,legW*(!ahead&&rabbit?2.30:1.48));
+      bones.push({hip:leg,upper,lower,foot,front:ahead,offset,footBase,mech:false});
+    }
 
     const roboLeg=new T.Group();
     armor.add(roboLeg);
@@ -324,12 +346,18 @@ function makeAnimal(spec,skin) {
       for(const leg of activeBones){
         poseLeg(leg,cycle,height*(kind==='hare'?.28:.23),effectiveStride,activity,mech?armor.position.y:bob,footHeight,duty);
       }
-      tail.rotation.y=Math.sin(cycle*Math.PI*2)*.25*activity+Math.sin(t*1.4)*.13;
-      head.rotation.x=-bob*.69+Math.sin(t*2.3)*.034-attack*.24+hit*.14;
-      roboHead.rotation.x=head.rotation.x;
+      const tailYaw=Math.sin(cycle*Math.PI*2)*.25*activity+Math.sin(t*1.4)*.13;
+      const headPitch=-bob*.69+Math.sin(t*2.3)*.034-attack*.24+hit*.14;
+      if(mech)roboHead.rotation.x=headPitch;
+      else if(baked)baked.pose(headPitch,tailYaw);
+      else{
+        fallback.tail.rotation.y=tailYaw;
+        fallback.head.rotation.x=headPitch;
+      }
       if(crest)crest.rotation.z=t*.51;
     },
     dispose(){
+      baked?.dispose();
       root.traverse(node=>{if(node.geometry&&!sharedShapes.has(node.geometry))node.geometry.dispose();});
       for(const surface of ownMaterials)surface.dispose();
       for(const texture of ownTextures)texture.dispose();

@@ -1,5 +1,6 @@
 import * as T from './vendor/three.module.min.js';
 import {makeModel} from './models.js';
+import {loadAnimalModels} from './blender-animals.js';
 import {characters, clamp, materials} from './rules.js';
 import {ground,lakeHeight,mix,noise,seeded,trailDistance,treesFor} from './landscape.js';
 import {bodyRadius} from './physics.js';
@@ -327,6 +328,9 @@ export class LakeScene {
     nature(this.scene,arena,trees);
     this.viewTrees=trees.filter(t=>Math.abs(t.x)<59&&t.z>-49&&t.z<56);
     this.nodes=new Map();this.effects=[];this.resourceNodes=new Map();
+    loadAnimalModels().then(models=>{
+      if(!this.disposed)this.animalModels=models;
+    });
     this.zoom=arena?12.7:8.65;this.yaw=arena?0:-Math.PI/6;
     this.cameraDistance=this.zoom;
     this.cameraSlope=arena?.43:.365;
@@ -416,15 +420,26 @@ export class LakeScene {
     const group=new T.Group();group.position.set(item.x,ground(item.x,item.z),item.z);this.scene.add(group);
     const mat=material(color,{metalness:key==='wood'||key==='clay'?0:.37,roughness:.61,emissive:color,emissiveIntensity:.065});
     group.userData.material=mat;
-    if(key==='wood'){
-      for(let i=0;i<3;i++)mesh(group,logGeo,mat,(i-1)*.25,.18,i*.05,.17,1.2+i*.16,.16).rotation.x=Math.PI*.51;
-    }else{
-      const geo=['clay','copper','iron','gold'].includes(key)?rockGeo:gemGeo;
-      for(let i=0;i<3;i++){
-        const piece=mesh(group,geo,mat,(i-1)*.20,.15+i*.085,i*.09,.31-i*.055,.2+i*.12,.36-i*.063);
-        piece.rotation.set(i*.32,i*1.39,i*.19);
+    const wood=key==='wood';
+    const geometry=wood?logGeo:['clay','copper','iron','gold'].includes(key)?rockGeo:gemGeo;
+    const pieces=new T.InstancedMesh(geometry,mat,3);
+    const transform=new T.Object3D();
+    for(let i=0;i<pieces.count;i++){
+      if(wood){
+        transform.position.set((i-1)*.25,.18,i*.05);
+        transform.scale.set(.17,1.2+i*.16,.16);
+        transform.rotation.set(Math.PI*.51,0,0);
+      }else{
+        transform.position.set((i-1)*.20,.15+i*.085,i*.09);
+        transform.scale.set(.31-i*.055,.2+i*.12,.36-i*.063);
+        transform.rotation.set(i*.32,i*1.39,i*.19);
       }
+      transform.updateMatrix();
+      pieces.setMatrixAt(i,transform.matrix);
     }
+    pieces.castShadow=true;
+    pieces.receiveShadow=true;
+    group.add(pieces);
     const nameplate=textSprite(name);nameplate.scale.multiplyScalar(.62);nameplate.position.y=.96;group.add(nameplate);
     group.userData.nameplate=nameplate;
     this.resourceNodes.set(item.id,group);
@@ -436,10 +451,12 @@ export class LakeScene {
   }
   actor(a,t,dt){
     let node=this.nodes.get(a.id);
-    if(!node||node.skin!==a.skin||node.key!==a.key){
+    const skin=a.skin??'default';
+    const template=skin==='default'?this.animalModels?.get(a.key):undefined;
+    if(!node||node.skin!==skin||node.key!==a.key||node.template!==template){
       if(node)this.removeActor(a.id);
       const spec=characters[a.key];
-      const model=makeModel(spec,a.skin);this.scene.add(model.root);
+      const model=makeModel(spec,skin,template);this.scene.add(model.root);
       const mark=a.id==='self'||a.noName?null:textSprite(a.label??spec.name,a.team==='enemy'?'#ffd1ac':'#e4f7d2');
       if(mark)this.scene.add(mark);
       const footHeight=(x,z)=>{
@@ -448,7 +465,7 @@ export class LakeScene {
         const height=ground(position.x+(x*c+z*s)*scale.x,position.z+(z*c-x*s)*scale.x);
         return clamp((height-position.y)/scale.x,-.22,.22);
       };
-      node={model,mark,key:a.key,skin:a.skin,spec,x:a.x,z:a.z,footHeight};
+      node={model,mark,key:a.key,skin,template,spec,x:a.x,z:a.z,footHeight};
       this.nodes.set(a.id,node);
     }
     const {model,mark,spec}=node;
@@ -533,12 +550,13 @@ export class LakeScene {
     this.renderer.render(this.scene,this.camera);
   }
   dispose(){
+    this.disposed=true;
     removeEventListener('resize',this.onResize);
     for(const id of this.nodes.keys())this.removeActor(id);
     const geometries=new Set(),materials=new Set();
     this.scene.traverse(node=>{
       if(node.isInstancedMesh)node.dispose();
-      if(node.geometry&&![rockGeo,ringGeo,logGeo,grassGeo,plank].includes(node.geometry))geometries.add(node.geometry);
+      if(node.geometry&&![rockGeo,gemGeo,ringGeo,logGeo,grassGeo,plank].includes(node.geometry))geometries.add(node.geometry);
       if(node.material)materials.add(node.material);
     });
     geometries.forEach(geo=>geo.dispose());
@@ -554,6 +572,7 @@ export class LakeScene {
 }
 function disposeChildren(group){
   group.traverse(node=>{
+    if(node.isInstancedMesh)node.dispose();
     if(node.isSprite){node.material.map.dispose();node.material.dispose();}
   });
   group.clear();
